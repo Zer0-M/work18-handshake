@@ -33,7 +33,9 @@ int server_handshake(int *to_client) {
   write(*to_client,ACK,HANDSHAKE_BUFFER_SIZE);
   char response[HANDSHAKE_BUFFER_SIZE];
   read(upstream,response,HANDSHAKE_BUFFER_SIZE);
-  printf("Response received from client\n");
+  close(*to_client);
+  close(upstream);
+  printf("Response received from client: %s\n",response);
   printf("Handshake Complete\n");
   return upstream;
 }
@@ -50,26 +52,31 @@ int server_handshake(int *to_client) {
   =========================*/
 int client_handshake(int *to_server) {
   int pid=getpid();
+  char privatepipe[10];
+  sprintf(privatepipe,"%d",pid);
   int c2sp=mkfifo(privatepipe,0644);
   if(c2sp){
     printf("%s \n",strerror(errno));
   }
-  int downstream=open("s2c",O_WRONLY);
-  if(downstream==-1){
-    printf("%s \n",strerror(errno));
-  }
-  write(downstream,privatepipe,HANDSHAKE_BUFFER_SIZE);
-  printf("Sent FIFO name: %d\n",privatepipe);
-  *to_server=open(privatepipe,O_RDONLY);
+  *to_server=open("s2c",O_WRONLY);
   if(*to_server==-1){
     printf("%s \n",strerror(errno));
   }
+  write(*to_server,privatepipe,HANDSHAKE_BUFFER_SIZE);
+  printf("Sent FIFO name: %s\n",privatepipe);
+  int downstream=open(privatepipe,O_RDONLY);
+  if(downstream==-1){
+    printf("%s \n",strerror(errno));
+  }
   char * buff=malloc(sizeof(char));
-  read(*to_server,buff,HANDSHAKE_BUFFER_SIZE);
-  printf("Message Received From Server\n");
+  read(downstream,buff,HANDSHAKE_BUFFER_SIZE);
+  printf("Message Received From Server:%s\n",buff);
   remove(privatepipe);
   printf("Private FIFO removed\n");
-  write(wfd,ACK,HANDSHAKE_BUFFER_SIZE);
-  printf("Response sent to server\n");  
+  write(*to_server,ACK,HANDSHAKE_BUFFER_SIZE);
+  close(*to_server);
+  close(downstream);
+  printf("Response sent to server\n");
+  printf("Handshake complete\n");
   return downstream;
 }
